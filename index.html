@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pâques astronomiques et ecclésiastiques</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --card: #ffffff;
+      --text: #132238;
+      --muted: #5c6b7a;
+      --border: #d9e2ec;
+      --accent: #1f6feb;
+      --accent-2: #eaf2ff;
+      --good: #0f766e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.45;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+    }
+    .lead {
+      color: var(--muted);
+      margin: 0 0 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 6px 24px rgba(16, 24, 40, 0.05);
+      margin-bottom: 18px;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 220px;
+    }
+    label { font-weight: 600; }
+    input[type="number"] {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      background: #fff;
+    }
+    button {
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(0.98); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .stat {
+      background: var(--accent-2);
+      border: 1px solid #cfe0ff;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .stat .k { color: var(--muted); font-size: 0.95rem; }
+    .stat .v { font-size: 1.35rem; font-weight: 800; margin-top: 4px; }
+    .small { color: var(--muted); font-size: 0.92rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { background: #f8fbff; }
+    details {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+      margin-top: 10px;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.93rem;
+    }
+    .ok { color: var(--good); font-weight: 700; }
+    .note { margin-top: 10px; color: var(--muted); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Pâques astronomiques et ecclésiastiques</h1>
+    <p class="lead">Page HTML autonome en JavaScript. Tu entres une année, tu cliques, et la page affiche les dates de Pâques ecclésiastiques et astronomiques, y compris selon les fuseaux horaires pris en charge par le navigateur.</p>
+
+    <div class="card">
+      <div class="controls">
+        <div class="field">
+          <label for="yearInput">Année</label>
+          <input id="yearInput" type="number" min="1900" max="3000" step="1" value="2026" />
+        </div>
+        <button id="computeBtn">Calculer toutes les dates</button>
+      </div>
+      <p class="note">Plage conseillée pour l’algorithme astronomique embarqué : 1900–3000.</p>
+    </div>
+
+    <div id="results" class="hidden">
+      <div class="card">
+        <div class="grid" id="summaryGrid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Dates astronomiques par fuseau</h2>
+        <p class="small">Les fuseaux sont regroupés par date obtenue. La date dépend du passage de l’instant astronomique à la date civile locale.</p>
+        <div id="tzGroups"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PI = Math.PI;
+    const DEG = PI / 180;
+    const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+    const WEEKDAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+
+    function sinDeg(x) { return Math.sin(x * DEG); }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function formatYMD(ymd) {
+      return `${ymd.day} ${MONTHS_FR[ymd.month - 1]} ${ymd.year}`;
+    }
+
+    function formatUTCInstantFromJD(jd) {
+      const ms = jdToUnixMs(jd);
+      const d = new Date(ms);
+      return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())} UTC`;
+    }
+
+    function jdToUnixMs(jd) {
+      return (jd - 2440587.5) * 86400000;
+    }
+
+    function gregorianEaster(year) {
+      const a = year % 19;
+      const b = Math.floor(year / 100);
+      const c = year % 100;
+      const d = Math.floor(b / 4);
+      const e = b % 4;
+      const f = Math.floor((b + 8) / 25);
+      const g = Math.floor((b - f + 1) / 3);
+      const h = (19 * a + b - d - g + 15) % 30;
+      const i = Math.floor(c / 4);
+      const k = c % 4;
+      const l = (32 + 2 * e + 2 * i - h - k) % 7;
+      const m = Math.floor((a + 11 * h + 22 * l) / 451);
+      const n = h + l - 7 * m + 114;
+      const month = Math.floor(n / 31);
+      const day = (n % 31) + 1;
+      return { year, month, day };
+    }
+
+    function julianEaster(year) {
+      const a = year % 4;
+      const b = year % 7;
+      const c = year % 19;
+      const d = (19 * c + 15) % 30;
+      const e = (2 * a + 4 * b - d + 34) % 7;
+      const month = Math.floor((d + e + 114) / 31);
+      const day = ((d + e + 114) % 31) + 1;
+      return julianToGregorian(year, month, day);
+    }
+
+    function julianToGregorian(y, m, d) {
+      let a = Math.floor((14 - m) / 12);
+      let y2 = y + 4800 - a;
+      let m2 = m + 12 * a - 3;
+      const jdn = d + Math.floor((153 * m2 + 2) / 5) + 365 * y2 + Math.floor(y2 / 4) - 32083;
+      return jdnToGregorian(jdn);
+    }
+
+    function jdnToGregorian(jdn) {
+      let a = jdn + 32044;
+      let b = Math.floor((4 * a + 3) / 146097);
+      let c = a - Math.floor(146097 * b / 4);
+      let d = Math.floor((4 * c + 3) / 1461);
+      let e = c - Math.floor(1461 * d / 4);
+      let m = Math.floor((5 * e + 2) / 153);
+      let day = e - Math.floor((153 * m + 2) / 5) + 1;
+      let month = m + 3 - 12 * Math.floor(m / 10);
+      let year = 100 * b + d - 4800 + Math.floor(m / 10);
+      return { year, month, day };
+    }
+
+    function jdToGregorianDateOnly(jd) {
+      const J = jd + 0.5;
+      const Z = Math.floor(J);
+      const F = J - Z;
+      let A;
+      if (Z < 2299161) {
+        A = Z;
+      } else {
+        const alpha = Math.floor((Z - 1867216.25) / 36524.25);
+        A = Z + 1 + alpha - Math.floor(alpha / 4);
+      }
+      const B = A + 1524;
+      const C = Math.floor((B - 122.1) / 365.25);
+      const D = Math.floor(365.25 * C);
+      const E = Math.floor((B - D) / 30.6001);
+      const dayReal = B - D - Math.floor(30.6001 * E) + F;
+      const day = Math.floor(dayReal);
+      const month = (E < 14) ? E - 1 : E - 13;
+      const year = (month > 2) ? C - 4716 : C - 4715;
+      return { year, month, day };
+    }
+
+    function isLeapGregorian(y) {
+      return (y % 400 === 0) || (y % 4 === 0 && y % 100 !== 0);
+    }
+
+    function daysInMonth(y, m) {
+      if ([1,3,5,7,8,10,12].includes(m)) return 31;
+      if ([4,6,9,11].includes(m)) return 30;
+      return isLeapGregorian(y) ? 29 : 28;
+    }
+
+    function addDays(ymd, n) {
+      let { year, month, day } = ymd;
+      for (let i = 0; i < n; i++) {
+        day += 1;
+        if (day > daysInMonth(year, month)) {
+          day = 1;
+          month += 1;
+          if (month > 12) {
+            month = 1;
+            year += 1;
+          }
+        }
+      }
+      return { year, month, day };
+    }
+
+    function weekdayGregorian(ymd) {
+      const { year, month, day } = ymd;
+      const a = Math.floor((14 - month) / 12);
+      const y = year - a;
+      const m = month + 12 * a - 2;
+      const w = (day + y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + Math.floor(31 * m / 12)) % 7;
+      return w === 0 ? 6 : w - 1; // 0=lundi ... 6=dimanche
+    }
+
+    function nextSundayStrict(ymd) {
+      const w = weekdayGregorian(ymd);
+      return addDays(ymd, w === 6 ? 7 : 6 - w);
+    }
+
+    function marchEquinoxJDE(y) {
+      const T = (y - 2000.0) / 1000.0;
+      return 2451623.80984 + 365242.37404 * T + 0.05169 * T * T - 0.00411 * T * T * T - 0.00057 * T * T * T * T;
+    }
+
+    function trueFullMoonJDFromK(k) {
+      const K = k + 0.5;
+      const T = K / 1236.85;
+      const T2 = T * T;
+      const T3 = T2 * T;
+      let jd = 2415020.75933 + 29.53058868 * K + 0.0001178 * T2 - 0.000000155 * T3 + 0.00033 * sinDeg(166.56 + 132.87 * T - 0.009173 * T2);
+      const M = 359.2242 + 29.10535608 * K - 0.0000333 * T2 - 0.00000347 * T3;
+      const Mp = 306.0253 + 385.81691806 * K + 0.0107306 * T2 + 0.00001236 * T3;
+      const A = 21.2964 + 390.67050646 * K - 0.0016528 * T2 - 0.00000239 * T3;
+      jd += (0.1734 - 0.000393 * T) * sinDeg(M)
+          + 0.0021 * sinDeg(2 * M)
+          - 0.4068 * sinDeg(Mp)
+          + 0.0161 * sinDeg(2 * Mp)
+          - 0.0004 * sinDeg(3 * Mp)
+          + 0.0104 * sinDeg(2 * A)
+          - 0.0051 * sinDeg(M + Mp)
+          - 0.0074 * sinDeg(M - Mp)
+          + 0.0004 * sinDeg(2 * A + M)
+          - 0.0004 * sinDeg(2 * A - M)
+          - 0.0006 * sinDeg(2 * A + Mp)
+          + 0.0010 * sinDeg(2 * A - Mp)
+          + 0.0005 * sinDeg(M + 2 * Mp);
+      return jd;
+    }
+
+    function astronomicalFullMoonAndEasterUTC(year) {
+      const Eq = marchEquinoxJDE(year);
+      let k = Math.floor((year - 1900.0) * 12.3685) - 2;
+      let F;
+      while (true) {
+        F = trueFullMoonJDFromK(k);
+        if (F > Eq) break;
+        k += 1;
+      }
+      const fullMoonDateUTC = jdToGregorianDateOnly(F);
+      const easterUTC = nextSundayStrict(fullMoonDateUTC);
+      return { equinoxJD: Eq, fullMoonJD: F, fullMoonDateUTC, easterUTC };
+    }
+
+    function ymdInTimeZoneFromJD(jd, timeZone) {
+      const date = new Date(jdToUnixMs(jd));
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const parts = formatter.formatToParts(date);
+      const out = {};
+      for (const p of parts) {
+        if (p.type === 'year' || p.type === 'month' || p.type === 'day') out[p.type] = Number(p.value);
+      }
+      return { year: out.year, month: out.month, day: out.day };
+    }
+
+    function getAllTimeZones() {
+      if (Intl.supportedValuesOf) {
+        try { return Intl.supportedValuesOf('timeZone'); } catch (e) {}
+      }
+      return [
+        'UTC', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Athens', 'Asia/Jerusalem',
+        'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+        'America/Sao_Paulo', 'Africa/Cairo', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata',
+        'Asia/Bangkok', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'
+      ];
+    }
+
+    function computeAll(year) {
+      const greg = gregorianEaster(year);
+      const jul = julianEaster(year);
+      const astro = astronomicalFullMoonAndEasterUTC(year);
+      const zones = getAllTimeZones();
+      const groups = new Map();
+      for (const tz of zones) {
+        const localFullMoonDate = ymdInTimeZoneFromJD(astro.fullMoonJD, tz);
+        const localEaster = nextSundayStrict(localFullMoonDate);
+        const key = `${localEaster.year}-${pad2(localEaster.month)}-${pad2(localEaster.day)}`;
+        if (!groups.has(key)) groups.set(key, { date: localEaster, zones: [] });
+        groups.get(key).zones.push(tz);
+      }
+      const grouped = Array.from(groups.values()).sort((a, b) => {
+        const ka = `${a.date.year}${pad2(a.date.month)}${pad2(a.date.day)}`;
+        const kb = `${b.date.year}${pad2(b.date.month)}${pad2(b.date.day)}`;
+        return ka.localeCompare(kb);
+      });
+      return { greg, jul, astro, zones, grouped };
+    }
+
+    function render(year) {
+      const result = computeAll(year);
+      const summaryGrid = document.getElementById('summaryGrid');
+      const tzGroups = document.getElementById('tzGroups');
+      summaryGrid.innerHTML = '';
+      tzGroups.innerHTML = '';
+
+      const astroUTC = result.astro.easterUTC;
+      const uniqueDatesCount = result.grouped.length;
+
+      const cards = [
+        { k: 'Pâques ecclésiastique grégorienne', v: formatYMD(result.greg) },
+        { k: 'Pâques ecclésiastique julienne (convertie grégorien civil)', v: formatYMD(result.jul) },
+        { k: 'Pâques astronomique UTC / Greenwich', v: formatYMD(astroUTC) },
+        { k: 'Équinoxe de mars approché', v: formatUTCInstantFromJD(result.astro.equinoxJD) },
+        { k: 'Première pleine lune après l’équinoxe', v: formatUTCInstantFromJD(result.astro.fullMoonJD) },
+        { k: 'Nombre de fuseaux testés', v: String(result.zones.length) },
+        { k: 'Nombre de dates astronomiques locales distinctes', v: String(uniqueDatesCount) }
+      ];
+
+      for (const c of cards) {
+        const div = document.createElement('div');
+        div.className = 'stat';
+        div.innerHTML = `<div class="k">${c.k}</div><div class="v">${c.v}</div>`;
+        summaryGrid.appendChild(div);
+      }
+
+      result.grouped.forEach((group, idx) => {
+        const details = document.createElement('details');
+        if (idx === 0) details.open = true;
+        const weekday = WEEKDAYS_FR[weekdayGregorian(group.date)];
+        const title = `${formatYMD(group.date)} (${weekday}) — ${group.zones.length} fuseau(x)`;
+        const pre = document.createElement('div');
+        pre.className = 'mono';
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.textContent = group.zones.join(', ');
+        details.innerHTML = `<summary>${title}</summary>`;
+        details.appendChild(pre);
+        tzGroups.appendChild(details);
+      });
+
+      document.getElementById('results').classList.remove('hidden');
+    }
+
+    document.getElementById('computeBtn').addEventListener('click', () => {
+      const year = Number(document.getElementById('yearInput').value);
+      if (!Number.isInteger(year) || year < 1900 || year > 3000) {
+        alert('Entre une année entière entre 1900 et 3000.');
+        return;
+      }
+      render(year);
+    });
+
+    render(2026);
+  </script>
+</body>
+</html>
