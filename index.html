@@ -349,7 +349,7 @@
 
     function getAllTimeZones() {
       if (Intl.supportedValuesOf) {
-        try { return Intl.supportedValuesOf('timeZone'); } catch (e) {}
+        try { return Intl.supportedValuesOf('timeZone'); } catch { /* liste ci-dessous */ }
       }
       return [
         'UTC', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Athens', 'Asia/Jerusalem',
